@@ -56,6 +56,7 @@ export type RahatActions = {
   getCurrentUser: () => UserProfile | null;
   findUserByEmail: (email: string) => UserProfile | null;
   updateUserProfile: (userId: string, updates: Pick<UserProfile, 'name' | 'phone'>) => { ok: boolean; error?: string };
+  updateVolunteerLocation: (volunteerId: string, location: GeoCoords) => { ok: boolean; error?: string };
   createEmergencyRequest: (input: {
     citizenEmail: string;
     citizenName: string;
@@ -285,6 +286,18 @@ export const useRahatStore = create<RahatStore>((set, get) => ({
       users: s.users.map((user) => user.id === userId ? { ...user, name, phone: updates.phone?.trim() || undefined } : user),
     }));
     get().appendAuditLog({ actor: userId, action: 'UPDATE_PROFILE', entityType: 'USER', entityId: userId, note: 'Profile details updated' });
+    persist(get());
+    return { ok: true };
+  },
+
+  updateVolunteerLocation: (volunteerId, location) => {
+    if (!Number.isFinite(location.lat) || !Number.isFinite(location.lng)) {
+      return { ok: false, error: 'Invalid location coordinates.' };
+    }
+    set((s) => ({
+      ...s,
+      volunteers: s.volunteers.map((volunteer) => volunteer.id === volunteerId ? { ...volunteer, location } : volunteer),
+    }));
     persist(get());
     return { ok: true };
   },
