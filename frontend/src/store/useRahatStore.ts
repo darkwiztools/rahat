@@ -56,6 +56,9 @@ export type RahatActions = {
   findUserByEmail: (email: string) => UserProfile | null;
   createAccount: (input: { name: string; email: string; phone: string; password: string; role: 'citizen' | 'volunteer' }) => { ok: boolean; error?: string; userId?: string };
   deleteRequest: (requestId: string, ctx: ActorCtx) => { ok: boolean; error?: string };
+  createResource: (input: Pick<ResourceInventory, 'name' | 'category' | 'quantity' | 'unit' | 'storageLocation' | 'lowThreshold'>) => ResourceInventory;
+  createIncident: (input: Pick<Incident, 'name' | 'type' | 'affectedArea' | 'severity' | 'description' | 'status'>) => Incident;
+  createShelter: (input: Pick<Shelter, 'name' | 'address' | 'capacity' | 'foodAvailable' | 'waterAvailable' | 'medicalAvailable' | 'status'> & { location: GeoCoords }) => Shelter;
   updateUserProfile: (userId: string, updates: Pick<UserProfile, 'name' | 'phone'>) => { ok: boolean; error?: string };
   updateVolunteerLocation: (volunteerId: string, location: GeoCoords) => { ok: boolean; error?: string };
   refreshFromStorage: () => Promise<void>;
@@ -320,6 +323,27 @@ export const useRahatStore = create<RahatStore>((set, get) => ({
     return { ok: true };
   },
 
+  createResource: (input) => {
+    const resource: ResourceInventory = { id: generateUUID(), ...input, lastUpdated: nowISO() };
+    set((s) => ({ ...s, resources: [resource, ...s.resources] }));
+    persist(get());
+    return resource;
+  },
+
+  createIncident: (input) => {
+    const incident: Incident = { id: generateIncidentId(new Date().getFullYear(), get().incidentCounter + 1), ...input, startTime: nowISO(), operationalNotes: [] };
+    set((s) => ({ ...s, incidents: [incident, ...s.incidents], incidentCounter: s.incidentCounter + 1 }));
+    persist(get());
+    return incident;
+  },
+
+  createShelter: (input) => {
+    const shelter: Shelter = { id: generateUUID(), ...input, occupied: 0 };
+    set((s) => ({ ...s, shelters: [shelter, ...s.shelters] }));
+    persist(get());
+    return shelter;
+  },
+
   updateUserProfile: (userId, updates) => {
     const name = updates.name.trim();
     if (name.length < 2) return { ok: false, error: 'Name must be at least 2 characters.' };
@@ -424,7 +448,13 @@ export const useRahatStore = create<RahatStore>((set, get) => ({
       timeline: [...request.timeline, { status, timestamp: ts, actor: ctx.actorName, note: `Status updated to ${status}` }],
       updatedAt: ts,
     };
-    set((s) => ({ ...s, requests: s.requests.map((item) => (item.id === requestId ? updatedRequest : item)) }));
+    set((s) => ({
+      ...s,
+      requests: s.requests.map((item) => (item.id === requestId ? updatedRequest : item)),
+      volunteers: s.volunteers.map((volunteer) => volunteer.id === request.assignedVolunteerId && ['RESOLVED', 'CANCELLED', 'DELIVERED'].includes(status)
+        ? { ...volunteer, availability: 'AVAILABLE', completedMissions: status === 'RESOLVED' ? volunteer.completedMissions + 1 : volunteer.completedMissions, currentAssignmentIds: volunteer.currentAssignmentIds.filter((id) => id !== requestId) }
+        : volunteer),
+    }));
     if (request.citizenEmail) {
       const citizen = get().findUserByEmail(request.citizenEmail);
       if (citizen) {

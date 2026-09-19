@@ -137,8 +137,3 @@ export const SEVERITY_ORDER: Record<Severity, number> = {
   LOW: 1,
 };
 
-export const DEMO_USERS = {
-  citizenEmail: 'citizen@rahat.demo',
-  volunteerEmail: 'volunteer@rahat.demo',
-  adminEmail: 'admin@rahat.demo',
-};
