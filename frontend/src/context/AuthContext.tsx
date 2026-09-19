@@ -32,6 +32,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const findUserByEmail = useRahatStore((s) => s.findUserByEmail);
   const getCurrentUser = useRahatStore((s) => s.getCurrentUser);
   const currentUserId = useRahatStore((s) => s.currentUserId);
+  const users = useRahatStore((s) => s.users);
   const initialized = useRahatStore((s) => s.initialized);
 
   const [isLoading, setIsLoading] = useState(true);
@@ -41,7 +42,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (initialized) {
       setCurrentUserState(getCurrentUser());
     }
-  }, [initialized, currentUserId, getCurrentUser]);
+  }, [initialized, currentUserId, users, getCurrentUser]);
 
   useEffect(() => {
     let mounted = true;

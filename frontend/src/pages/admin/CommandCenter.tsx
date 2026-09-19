@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   AlertTriangle,
   LifeBuoy,
@@ -19,6 +19,7 @@ import DataTable from '../../components/ui/DataTable';
 import StatusBadge from '../../components/ui/StatusBadge';
 import SeverityBadge from '../../components/ui/SeverityBadge';
 import AvailabilityBadge from '../../components/ui/AvailabilityBadge';
+import AssignVolunteerModal from '../../components/modals/AssignVolunteerModal';
 import { useRahatStore } from '../../store/useRahatStore';
 import type { EmergencyRequest, Notification, Volunteer } from '../../types/rahat';
 import { SEVERITY_ORDER } from '../../constants/rahat';
@@ -52,6 +53,7 @@ const CommandCenter: React.FC = () => {
   const resources = useRahatStore((s) => s.resources);
   const notifications = useRahatStore((s) => s.notifications);
   const markNotificationRead = useRahatStore((s) => s.markNotificationRead);
+  const [assignmentRequestId, setAssignmentRequestId] = useState<string | null>(null);
 
   const kpis = useMemo(() => {
     const activeRequests = requests.filter(
@@ -176,6 +178,17 @@ const CommandCenter: React.FC = () => {
         </span>
       ),
     },
+    {
+      key: 'actions',
+      label: 'Action',
+      render: (row: EmergencyRequest) => (
+        !row.assignedVolunteerId && !TERMINAL_STATUSES.includes(row.status as any) ? (
+          <button type="button" onClick={() => setAssignmentRequestId(row.id)} className="rounded-md bg-blue-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-700">Assign volunteer</button>
+        ) : (
+          <span className="text-xs text-slate-400">{row.assignedVolunteerId ? 'Assigned' : 'Closed'}</span>
+        )
+      ),
+    },
   ];
 
   const handleNotificationClick = (n: Notification) => {
@@ -278,6 +291,7 @@ const CommandCenter: React.FC = () => {
             rowKey="id"
             className="max-h-[420px]"
           />
+          <AssignVolunteerModal isOpen={assignmentRequestId !== null} onClose={() => setAssignmentRequestId(null)} requestId={assignmentRequestId} />
         </div>
 
         <div className="bg-white rounded-xl shadow-sm ring-1 ring-slate-200 overflow-hidden flex flex-col">

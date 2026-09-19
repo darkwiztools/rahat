@@ -55,6 +55,7 @@ export type RahatActions = {
   setCurrentUser: (userId: string | null) => Promise<void>;
   getCurrentUser: () => UserProfile | null;
   findUserByEmail: (email: string) => UserProfile | null;
+  updateUserProfile: (userId: string, updates: Pick<UserProfile, 'name' | 'phone'>) => { ok: boolean; error?: string };
   createEmergencyRequest: (input: {
     citizenEmail: string;
     citizenName: string;
@@ -274,6 +275,18 @@ export const useRahatStore = create<RahatStore>((set, get) => ({
   findUserByEmail: (email) => {
     const lower = email.toLowerCase();
     return get().users.find((u) => u.email.toLowerCase() === lower) || null;
+  },
+
+  updateUserProfile: (userId, updates) => {
+    const name = updates.name.trim();
+    if (name.length < 2) return { ok: false, error: 'Name must be at least 2 characters.' };
+    set((s) => ({
+      ...s,
+      users: s.users.map((user) => user.id === userId ? { ...user, name, phone: updates.phone?.trim() || undefined } : user),
+    }));
+    get().appendAuditLog({ actor: userId, action: 'UPDATE_PROFILE', entityType: 'USER', entityId: userId, note: 'Profile details updated' });
+    persist(get());
+    return { ok: true };
   },
 
   createEmergencyRequest: (input) => {

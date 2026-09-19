@@ -1,7 +1,7 @@
 import React, { useEffect, useCallback, useState } from 'react';
 import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet';
 import L from 'leaflet';
-import { Navigation, MapPin, AlertCircle } from 'lucide-react';
+import { Navigation, MapPin, AlertCircle, Satellite, Map as MapIcon } from 'lucide-react';
 import type { GeoCoords } from '../../types/rahat';
 import { pinIcon } from './layerStyles';
 
@@ -58,6 +58,8 @@ const LocationPickerMap: React.FC<LocationPickerMapProps> = ({
   zoom = 11,
 }) => {
   const [geoError, setGeoError] = useState(false);
+  const [locating, setLocating] = useState(false);
+  const [baseLayer, setBaseLayer] = useState<'street' | 'satellite'>('street');
 
   const centerLat = lat && !isNaN(lat) ? lat : WEST_CHAMBARAN_CENTER.lat;
   const centerLng = lng && !isNaN(lng) ? lng : WEST_CHAMBARAN_CENTER.lng;
@@ -72,11 +74,21 @@ const LocationPickerMap: React.FC<LocationPickerMapProps> = ({
   const handleUseMyLocation = () => {
     setGeoError(false);
     if (typeof navigator !== 'undefined' && navigator.geolocation) {
+      setLocating(true);
       navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          onPick(pos.coords.latitude, pos.coords.longitude);
+        async (pos) => {
+          let pickedAddress: string | undefined;
+          try {
+            const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${pos.coords.latitude}&lon=${pos.coords.longitude}`);
+            if (response.ok) pickedAddress = (await response.json()).display_name;
+          } catch {
+            pickedAddress = undefined;
+          }
+          setLocating(false);
+          onPick(pos.coords.latitude, pos.coords.longitude, pickedAddress);
         },
         () => {
+          setLocating(false);
           setGeoError(true);
         },
         { enableHighAccuracy: true, timeout: 8000 }
@@ -110,10 +122,11 @@ const LocationPickerMap: React.FC<LocationPickerMapProps> = ({
           scrollWheelZoom
           style={{ height: '100%', width: '100%' }}
         >
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
+          {baseLayer === 'street' ? (
+            <TileLayer key="street" attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+          ) : (
+            <TileLayer key="satellite" attribution="Tiles &copy; Esri — Source: Esri, Maxar, Earthstar Geographics" url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" />
+          )}
           <MapClickHandler onPick={handlePick} />
           <MapController center={[centerLat, centerLng]} />
           {hasCoords && (
@@ -130,13 +143,17 @@ const LocationPickerMap: React.FC<LocationPickerMapProps> = ({
             {address ? ` • ${address}` : ''}
           </span>
         </div>
+        <div className="flex items-center gap-1 rounded-md bg-slate-100 p-1">
+          <button type="button" onClick={() => setBaseLayer('street')} className={`inline-flex items-center gap-1 rounded px-2 py-1.5 font-medium ${baseLayer === 'street' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500'}`}><MapIcon className="w-3.5 h-3.5" />Street</button>
+          <button type="button" onClick={() => setBaseLayer('satellite')} className={`inline-flex items-center gap-1 rounded px-2 py-1.5 font-medium ${baseLayer === 'satellite' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500'}`}><Satellite className="w-3.5 h-3.5" />Satellite</button>
+        </div>
         <button
           type="button"
           onClick={handleUseMyLocation}
           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition-colors font-medium self-start sm:self-auto shadow-sm"
         >
           <Navigation className="w-3.5 h-3.5 text-blue-600" />
-          Use my location
+          {locating ? 'Finding location...' : 'Use my location'}
         </button>
       </div>
     </div>

@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { EMERGENCY_TYPES, RESOURCE_CATEGORIES, SEVERITIES } from '../../constants/rahat';
 import { useRahatStore } from '../../store/useRahatStore';
 import type { EmergencyRequest, RequestStatus } from '../../types/rahat';
+import LocationPickerMap from '../../components/map/LocationPickerMap';
 
 const terminalStatuses: RequestStatus[] = ['RESOLVED', 'CANCELLED'];
 const nextStatuses: Partial<Record<RequestStatus, RequestStatus>> = {
@@ -73,20 +74,24 @@ const PortalPage: React.FC<{ title: string }> = ({ title }) => {
   </div></main>;
 };
 
-const CitizenView: React.FC<{ currentUser: ReturnType<typeof useAuth>['currentUser']; ownRequests: EmergencyRequest[]; submitRequest: (event: React.FormEvent<HTMLFormElement>) => void }> = ({ currentUser, ownRequests, submitRequest }) => <>
+const CitizenView: React.FC<{ currentUser: ReturnType<typeof useAuth>['currentUser']; ownRequests: EmergencyRequest[]; submitRequest: (event: React.FormEvent<HTMLFormElement>) => void }> = ({ currentUser, ownRequests, submitRequest }) => {
+  const [location, setLocation] = useState({ lat: 26.98, lng: 84.5, address: '' });
+  return <>
   <form onSubmit={submitRequest} className="bg-white border border-slate-200 rounded-xl p-5 sm:p-6 space-y-5">
     <div><h2 className="text-lg font-semibold text-slate-900">Request emergency assistance</h2><p className="text-sm text-slate-500 mt-1">Share the situation and your location so coordinators can dispatch help.</p></div>
     <div className="grid gap-4 sm:grid-cols-2"><Field label="Full name" name="fullName" defaultValue={currentUser?.name} required /><Field label="Phone" name="phone" defaultValue={currentUser?.phone} required /><Field label="People affected" name="peopleAffected" type="number" min="1" defaultValue="1" required /><label className="text-sm font-medium text-slate-700">Emergency type<select name="emergencyType" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5" defaultValue="Flood">{EMERGENCY_TYPES.map((item) => <option key={item}>{item}</option>)}</select></label></div>
     <div><p className="text-sm font-medium text-slate-700 mb-2">What do you need?</p><div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{RESOURCE_CATEGORIES.slice(0, 8).map((resource) => <label key={resource} className="flex items-center gap-2 rounded-lg border border-slate-200 p-2 text-sm text-slate-600"><input type="checkbox" name="requiredResources" value={resource} />{resource}</label>)}</div></div>
     <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-medium text-slate-700">Severity<select name="severity" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5" defaultValue="HIGH">{SEVERITIES.map((item) => <option key={item}>{item}</option>)}</select></label><label className="text-sm font-medium text-slate-700">Preferred contact<select name="preferredContact" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5"><option>Phone</option><option>SMS</option><option>WhatsApp</option><option>Email</option></select></label></div>
-    <label className="block text-sm font-medium text-slate-700">Address<input name="address" required minLength={5} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5" placeholder="Village, ward, landmark" /></label>
-    <div className="grid gap-4 sm:grid-cols-2"><Field label="Latitude" name="lat" type="number" step="any" defaultValue="26.98" required /><Field label="Longitude" name="lng" type="number" step="any" defaultValue="84.5" required /></div>
+    <label className="block text-sm font-medium text-slate-700">Address<input name="address" value={location.address} onChange={(event) => setLocation((current) => ({ ...current, address: event.target.value }))} required minLength={5} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5" placeholder="Village, ward, landmark" /></label>
+    <LocationPickerMap lat={location.lat} lng={location.lng} address={location.address} onPick={(lat, lng, address) => setLocation({ lat, lng, address: address || location.address })} height="260px" />
+    <div className="grid gap-4 sm:grid-cols-2"><Field label="Latitude" name="lat" type="number" step="any" value={location.lat} onChange={(event) => setLocation((current) => ({ ...current, lat: Number(event.target.value) }))} required /><Field label="Longitude" name="lng" type="number" step="any" value={location.lng} onChange={(event) => setLocation((current) => ({ ...current, lng: Number(event.target.value) }))} required /></div>
     <label className="block text-sm font-medium text-slate-700">Describe the emergency<textarea name="description" required minLength={20} rows={4} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5" placeholder="Tell responders what is happening and what is most urgent." /></label>
     <label className="block text-sm font-medium text-slate-700">Accessibility or safety needs<input name="accessibilityRequirements" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5" /></label>
     <button className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 font-semibold text-white hover:bg-blue-700">Submit request <ArrowRight className="w-4 h-4" /></button>
   </form>
   <RequestList title="My submitted requests" requests={ownRequests} empty="No requests submitted yet." />
-</>;
+  </>;
+};
 
 const VolunteerView: React.FC<{ resourcesCount: number; openRequests: EmergencyRequest[]; assignedRequests: EmergencyRequest[]; claim: (request: EmergencyRequest) => void; advance: (request: EmergencyRequest) => void }> = ({ resourcesCount, openRequests, assignedRequests, claim, advance }) => <>
   <div className="grid gap-4 md:grid-cols-3 mb-6"><Metric label="Open missions" value={openRequests.length} icon={ClipboardList} /><Metric label="My assignments" value={assignedRequests.length} icon={Users} /><Metric label="Resource lines" value={resourcesCount} icon={Package} /></div>

@@ -7,7 +7,7 @@ import {
   useMap,
 } from 'react-leaflet';
 import L from 'leaflet';
-import { Maximize2, Eye, EyeOff, ExternalLink } from 'lucide-react';
+import { Maximize2, Eye, EyeOff, ExternalLink, Satellite, Map as MapIcon } from 'lucide-react';
 import type {
   EmergencyRequest,
   Volunteer,
@@ -122,6 +122,7 @@ const RahatMap: React.FC<RahatMapProps> = ({
   const [showShelters, setShowShelters] = useState(initShowShelters);
   const [showReliefCenters, setShowReliefCenters] = useState(initShowReliefCenters);
   const [fitSignal, setFitSignal] = useState(0);
+  const [baseLayer, setBaseLayer] = useState<'street' | 'satellite'>('street');
 
   const requestMarkers = useMemo(() => {
     if (!showRequests) return [];
@@ -179,10 +180,19 @@ const RahatMap: React.FC<RahatMapProps> = ({
         scrollWheelZoom
         style={{ height, width: '100%' }}
       >
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
+        {baseLayer === 'street' ? (
+          <TileLayer
+            key="street"
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          />
+        ) : (
+          <TileLayer
+            key="satellite"
+            attribution='Tiles &copy; Esri — Source: Esri, Maxar, Earthstar Geographics'
+            url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+          />
+        )}
         <CenterController center={center} zoom={zoom} />
         <FitController requests={requests} fitSignal={fitSignal} />
 
@@ -350,6 +360,10 @@ const RahatMap: React.FC<RahatMapProps> = ({
 
         <div className="bg-white rounded-lg shadow-md border border-slate-200 p-3 space-y-2 text-sm w-[190px]">
           <div className="font-semibold text-slate-800 mb-1">Layers</div>
+          <div className="grid grid-cols-2 gap-1 rounded-md bg-slate-100 p-1 mb-2">
+            <button type="button" onClick={() => setBaseLayer('street')} className={`inline-flex items-center justify-center gap-1 rounded px-2 py-1.5 text-xs font-semibold ${baseLayer === 'street' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500'}`}><MapIcon className="w-3.5 h-3.5" />Street</button>
+            <button type="button" onClick={() => setBaseLayer('satellite')} className={`inline-flex items-center justify-center gap-1 rounded px-2 py-1.5 text-xs font-semibold ${baseLayer === 'satellite' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500'}`}><Satellite className="w-3.5 h-3.5" />Satellite</button>
+          </div>
           <label className="flex items-center gap-2 cursor-pointer select-none">
             <input
               type="checkbox"
