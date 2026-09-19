@@ -55,6 +55,20 @@ export type RahatActions = {
   setCurrentUser: (userId: string | null) => Promise<void>;
   getCurrentUser: () => UserProfile | null;
   findUserByEmail: (email: string) => UserProfile | null;
+  createEmergencyRequest: (input: {
+    citizenEmail: string;
+    citizenName: string;
+    citizenPhone: string;
+    peopleAffected: number;
+    emergencyType: EmergencyRequest['emergencyType'];
+    requiredResources: EmergencyRequest['requiredResources'];
+    severity: Severity;
+    description: string;
+    location: GeoCoords;
+    accessibilityRequirements?: string;
+    preferredContact?: EmergencyRequest['preferredContact'];
+  }) => EmergencyRequest;
+  updateRequestStatus: (requestId: string, status: RequestStatus, ctx: ActorCtx) => { ok: boolean; error?: string };
 
   assignVolunteerToRequest: (requestId: string, volunteerId: string, ctx: ActorCtx) => { ok: boolean; error?: string };
   allocateResourcesToRequest: (
@@ -260,6 +274,71 @@ export const useRahatStore = create<RahatStore>((set, get) => ({
   findUserByEmail: (email) => {
     const lower = email.toLowerCase();
     return get().users.find((u) => u.email.toLowerCase() === lower) || null;
+  },
+
+  createEmergencyRequest: (input) => {
+    const state = get();
+    const ts = nowISO();
+    const nextCounter = state.requestCounter + 1;
+    const request: EmergencyRequest = {
+      id: generateRequestId(new Date().getFullYear(), nextCounter),
+      ...input,
+      status: 'NEW',
+      allocatedResources: [],
+      timeline: [{ status: 'NEW', timestamp: ts, actor: input.citizenName, note: 'Request submitted through the citizen portal' }],
+      coordinatorNotes: '',
+      createdAt: ts,
+      updatedAt: ts,
+    };
+    set((s) => ({ ...s, requests: [request, ...s.requests], requestCounter: nextCounter }));
+    get().createNotification({
+      targetRole: 'coordinator',
+      type: 'NEW_REQUEST',
+      title: `New ${request.severity.toLowerCase()} request: ${request.id}`,
+      message: `${request.emergencyType} reported by ${request.citizenName} at ${request.location.address}`,
+      relatedRequestId: request.id,
+    });
+    get().appendAuditLog({
+      actor: input.citizenEmail,
+      action: 'CREATE_REQUEST',
+      entityType: 'REQUEST',
+      entityId: request.id,
+      note: 'Citizen submitted an emergency request',
+      afterSnapshot: request,
+    });
+    persist(get());
+    return request;
+  },
+
+  updateRequestStatus: (requestId, status, ctx) => {
+    const request = get().requests.find((item) => item.id === requestId);
+    if (!request) return { ok: false, error: 'Request not found' };
+    if (request.status !== status && !STATUS_TRANSITION_GRAPH[request.status].includes(status)) {
+      return { ok: false, error: `Cannot move request from ${request.status} to ${status}` };
+    }
+    const ts = nowISO();
+    const updatedRequest: EmergencyRequest = {
+      ...request,
+      status,
+      timeline: [...request.timeline, { status, timestamp: ts, actor: ctx.actorName, note: `Status updated to ${status}` }],
+      updatedAt: ts,
+    };
+    set((s) => ({ ...s, requests: s.requests.map((item) => (item.id === requestId ? updatedRequest : item)) }));
+    if (request.citizenEmail) {
+      const citizen = get().findUserByEmail(request.citizenEmail);
+      if (citizen) {
+        get().createNotification({
+          targetUserId: citizen.id,
+          type: 'REQUEST_STATUS',
+          title: `Request ${request.id} is now ${status.replace('_', ' ')}`,
+          message: 'Your relief request has a new status update.',
+          relatedRequestId: request.id,
+        });
+      }
+    }
+    get().appendAuditLog({ actor: ctx.actorId || ctx.actorName, action: 'UPDATE_REQUEST_STATUS', entityType: 'REQUEST', entityId: requestId, beforeSnapshot: request, afterSnapshot: updatedRequest });
+    persist(get());
+    return { ok: true };
   },
 
   assignVolunteerToRequest: (requestId, volunteerId, ctx) => {
