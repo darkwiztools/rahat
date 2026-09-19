@@ -22,8 +22,7 @@ import type {
 } from '../types/rahat';
 
 export type UiDensity = 'comfortable' | 'compact';
-import { STATUS_TRANSITION_GRAPH, DEMO_USERS } from '../constants/rahat';
-import { createSeedData, SeedData } from '../data/seed';
+import { STATUS_TRANSITION_GRAPH } from '../constants/rahat';
 import { generateRequestId, generateIncidentId, generateUUID } from '../utils/ids';
 
 export type RahatSlice = {
@@ -55,6 +54,8 @@ export type RahatActions = {
   setCurrentUser: (userId: string | null) => Promise<void>;
   getCurrentUser: () => UserProfile | null;
   findUserByEmail: (email: string) => UserProfile | null;
+  createAccount: (input: { name: string; email: string; phone: string; password: string; role: 'citizen' | 'volunteer' }) => { ok: boolean; error?: string; userId?: string };
+  deleteRequest: (requestId: string, ctx: ActorCtx) => { ok: boolean; error?: string };
   updateUserProfile: (userId: string, updates: Pick<UserProfile, 'name' | 'phone'>) => { ok: boolean; error?: string };
   updateVolunteerLocation: (volunteerId: string, location: GeoCoords) => { ok: boolean; error?: string };
   refreshFromStorage: () => Promise<void>;
@@ -163,24 +164,24 @@ async function clearStorage(): Promise<void> {
   }
 }
 
-function seedToState(seed: SeedData): RahatSlice {
+function emptyState(): RahatSlice {
   return {
     initialized: true,
-    users: seed.users,
-    requests: seed.requests,
-    volunteers: seed.volunteers,
-    resources: seed.resources,
-    allocations: seed.allocations,
-    shelters: seed.shelters,
-    reliefCenters: seed.reliefCenters,
-    incidents: seed.incidents,
+    users: [{ id: 'u-admin', email: 'admin@rahat.com', name: 'Aditya', role: 'coordinator', phone: '', password: '@Aditya#8080', createdAt: nowISO() }],
+    requests: [],
+    volunteers: [],
+    resources: [],
+    allocations: [],
+    shelters: [],
+    reliefCenters: [],
+    incidents: [],
     notifications: [],
     auditLog: [],
-    requestCounter: seed.requestCounter,
-    incidentCounter: seed.incidentCounter,
+    requestCounter: 0,
+    incidentCounter: 0,
     currentUserId: null,
     offlineBannerDismissed: false,
-    backendOnline: false,
+    backendOnline: true,
   };
 }
 
@@ -208,24 +209,31 @@ export const useRahatStore = create<RahatStore>((set, get) => ({
   incidentCounter: 0,
   currentUserId: null,
   offlineBannerDismissed: false,
-  backendOnline: false,
+  backendOnline: true,
 
   initialize: async () => {
     if (get().initialized) return;
     const hydrated = await hydrate();
     if (hydrated) {
-      set((s) => ({ ...s, ...(hydrated as any), initialized: true }));
+      const hasLegacyDemo = hydrated.users?.some((user) => user.email.endsWith('@rahat.demo'));
+      if (hasLegacyDemo || !hydrated.users?.some((user) => user.email === 'admin@rahat.com')) {
+        const base = emptyState();
+        base.auditLog = [{ id: generateUUID(), actor: 'system', action: 'MIGRATE_WORKSPACE', entityType: 'SYSTEM', entityId: 'workspace', note: 'Removed legacy demo data', timestamp: nowISO() }];
+        set(base);
+        await persist(get());
+      } else {
+        set((s) => ({ ...s, ...(hydrated as any), initialized: true, backendOnline: true }));
+      }
     } else {
-      const seed = createSeedData();
-      const base = seedToState(seed);
+      const base = emptyState();
       base.auditLog = [
         {
           id: generateUUID(),
           actor: 'system',
-          action: 'INIT_SEED',
+          action: 'INIT_WORKSPACE',
           entityType: 'SYSTEM',
-          entityId: 'seed',
-          note: 'Seeded demo data for RAHAT',
+          entityId: 'workspace',
+          note: 'Initialized live Rahat workspace',
           timestamp: nowISO(),
         },
       ];
@@ -236,16 +244,15 @@ export const useRahatStore = create<RahatStore>((set, get) => ({
 
   resetDemoData: async () => {
     await clearStorage();
-    const seed = createSeedData();
-    const base = seedToState(seed);
+    const base = emptyState();
     base.auditLog = [
       {
         id: generateUUID(),
         actor: 'system',
-        action: 'RESET_DEMO',
+        action: 'RESET_WORKSPACE',
         entityType: 'SYSTEM',
         entityId: 'reset',
-        note: 'Demo data reset',
+        note: 'Workspace reset',
         timestamp: nowISO(),
       },
     ];
@@ -285,12 +292,41 @@ export const useRahatStore = create<RahatStore>((set, get) => ({
     return get().users.find((u) => u.email.toLowerCase() === lower) || null;
   },
 
+  createAccount: (input) => {
+    const email = input.email.trim().toLowerCase();
+    if (input.name.trim().length < 2 || !email.includes('@') || input.password.length < 8) return { ok: false, error: 'Enter a valid name, email, and password of at least 8 characters.' };
+    if (get().users.some((user) => user.email.toLowerCase() === email)) return { ok: false, error: 'An account with this email already exists.' };
+    const userId = generateUUID();
+    const user: UserProfile = { id: userId, email, name: input.name.trim(), role: input.role, phone: input.phone.trim(), password: input.password, createdAt: nowISO() };
+    set((s) => ({ ...s, users: [...s.users, user] }));
+    if (input.role === 'volunteer') {
+      set((s) => ({ ...s, volunteers: [...s.volunteers, { id: generateUUID(), userId, name: user.name, phone: user.phone || '', skills: ['Communication'], availability: 'AVAILABLE', location: { lat: 26.98, lng: 84.5, address: 'Location not shared yet' }, vehicle: 'None', currentAssignmentIds: [], completedMissions: 0, experienceMonths: 0 }] }));
+    }
+    persist(get());
+    return { ok: true, userId };
+  },
+
+  deleteRequest: (requestId, ctx) => {
+    const request = get().requests.find((item) => item.id === requestId);
+    if (!request) return { ok: false, error: 'Request not found.' };
+    set((s) => ({
+      ...s,
+      requests: s.requests.filter((item) => item.id !== requestId),
+      allocations: s.allocations.filter((allocation) => allocation.requestId !== requestId),
+      volunteers: s.volunteers.map((volunteer) => ({ ...volunteer, currentAssignmentIds: volunteer.currentAssignmentIds.filter((id) => id !== requestId) })),
+    }));
+    get().appendAuditLog({ actor: ctx.actorId || ctx.actorName, action: 'DELETE_REQUEST', entityType: 'REQUEST', entityId: requestId, note: `Deleted request ${requestId}` });
+    persist(get());
+    return { ok: true };
+  },
+
   updateUserProfile: (userId, updates) => {
     const name = updates.name.trim();
     if (name.length < 2) return { ok: false, error: 'Name must be at least 2 characters.' };
     set((s) => ({
       ...s,
       users: s.users.map((user) => user.id === userId ? { ...user, name, phone: updates.phone?.trim() || undefined } : user),
+      volunteers: s.volunteers.map((volunteer) => volunteer.userId === userId ? { ...volunteer, name, phone: updates.phone?.trim() || '' } : volunteer),
     }));
     get().appendAuditLog({ actor: userId, action: 'UPDATE_PROFILE', entityType: 'USER', entityId: userId, note: 'Profile details updated' });
     persist(get());

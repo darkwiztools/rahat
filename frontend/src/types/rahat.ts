@@ -87,6 +87,7 @@ export interface UserProfile {
   phone?: string;
   avatar?: string;
   createdAt: string;
+  password?: string;
 }
 
 export interface TimelineEntry {

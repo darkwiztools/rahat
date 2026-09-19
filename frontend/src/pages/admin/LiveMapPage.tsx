@@ -38,11 +38,17 @@ function LegendDot({ color, size = 12 }: { color: string; size?: number }) {
 const LiveMapPage: React.FC = () => {
   const navigate = useNavigate();
   const { requests, volunteers, shelters, reliefCenters, incidents } = useRahatStore();
+  const refreshFromStorage = useRahatStore((s) => s.refreshFromStorage);
   const [selectedIncidentId, setSelectedIncidentId] = useState<string>('all');
   const [center, setCenter] = useState<[number, number] | undefined>(undefined);
   const [zoom, setZoom] = useState<number | undefined>(undefined);
   const [resetKey, setResetKey] = useState(0);
   const [selectedRequest, setSelectedRequest] = useState<EmergencyRequest | null>(null);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => { void refreshFromStorage(); }, 3000);
+    return () => window.clearInterval(interval);
+  }, [refreshFromStorage]);
 
   const activeRequestsCount = useMemo(
     () => requests.filter((r) => !isTerminalStatus(r.status)).length,
@@ -186,7 +192,7 @@ const LiveMapPage: React.FC = () => {
           </button>
         </div>
 
-        <RahatMap
+          <RahatMap
           key={resetKey}
           requests={requests}
           volunteers={volunteers}

@@ -21,6 +21,7 @@ import {
   colorForVolunteer,
   customDivIcon,
 } from './layerStyles';
+import { haversineKm } from '../../utils/geo';
 
 const WEST_CHAMBARAN_CENTER = { lat: 26.98, lng: 84.5 };
 
@@ -28,6 +29,11 @@ const TERMINAL_STATUSES: RequestStatus[] = ['RESOLVED', 'CANCELLED', 'DELIVERED'
 
 function isTerminalStatus(s: RequestStatus): boolean {
   return TERMINAL_STATUSES.includes(s);
+}
+
+function etaForDistance(distanceKm: number): string {
+  const minutes = Math.max(1, Math.round((distanceKm / 25) * 60));
+  return minutes < 60 ? `${minutes} min ETA` : `${Math.round(minutes / 60)} hr ETA`;
 }
 
 function LegendDot({ color, size = 12 }: { color: string; size?: number }) {
@@ -127,7 +133,7 @@ const RahatMap: React.FC<RahatMapProps> = ({
   const requestMarkers = useMemo(() => {
     if (!showRequests) return [];
     return requests
-      .filter((r) => r.location && typeof r.location.lat === 'number')
+      .filter((r) => !isTerminalStatus(r.status) && r.location && typeof r.location.lat === 'number')
       .map((r) => ({
         key: `req-${r.id}`,
         position: [r.location.lat, r.location.lng] as L.LatLngTuple,
@@ -138,15 +144,17 @@ const RahatMap: React.FC<RahatMapProps> = ({
 
   const volunteerMarkers = useMemo(() => {
     if (!showVolunteers) return [];
+    const activeRequestLocations = requests.filter((request) => !isTerminalStatus(request.status)).map((request) => request.location);
     return volunteers
-      .filter((v) => v.location && typeof v.location.lat === 'number')
+      .filter((v) => v.location && typeof v.location.lat === 'number' && v.currentAssignmentIds.some((id) => requests.some((request) => request.id === id && !isTerminalStatus(request.status))))
       .map((v) => ({
         key: `vol-${v.id}`,
         position: [v.location.lat, v.location.lng] as L.LatLngTuple,
         icon: customDivIcon(colorForVolunteer(v.availability), 20),
         volunteer: v,
+          nearestDistanceKm: activeRequestLocations.length ? Math.min(...activeRequestLocations.map((location) => haversineKm(v.location, location))) : null,
       }));
-  }, [volunteers, showVolunteers]);
+        }, [volunteers, requests, showVolunteers]);
 
   const shelterMarkers = useMemo(() => {
     if (!showShelters) return [];
@@ -236,6 +244,7 @@ const RahatMap: React.FC<RahatMapProps> = ({
                     <span className="text-slate-400">Status: </span>
                     <span className="font-medium text-slate-800">{m.request.status}</span>
                   </div>
+                  {m.request.assignedVolunteerId && volunteers.find((volunteer) => volunteer.id === m.request.assignedVolunteerId) && (() => { const responder = volunteers.find((volunteer) => volunteer.id === m.request.assignedVolunteerId)!; const distance = haversineKm(responder.location, m.request.location); return <div><span className="text-slate-400">Responder: </span><span className="font-medium text-slate-800">{responder.name} · {distance.toFixed(1)} km · {etaForDistance(distance)}</span></div>; })()}
                   <div className="text-xs text-slate-500 truncate max-w-[220px]">
                     {m.request.location.address}
                   </div>
@@ -282,6 +291,7 @@ const RahatMap: React.FC<RahatMapProps> = ({
                       {m.volunteer.completedMissions} completed
                     </span>
                   </div>
+                  {m.nearestDistanceKm !== null && <div><span className="text-slate-400">Nearest active request: </span><span className="font-medium text-slate-800">{m.nearestDistanceKm.toFixed(1)} km · {etaForDistance(m.nearestDistanceKm)}</span></div>}
                 </div>
               </div>
             </Popup>

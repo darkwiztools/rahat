@@ -8,6 +8,7 @@ interface AuthContextType {
   currentUser: UserProfile | null;
   userRole: Role | null;
   login: (email: string, password: string) => Promise<string>;
+  signup: (input: { name: string; email: string; phone: string; password: string; role: 'citizen' | 'volunteer' }) => Promise<string>;
   logout: () => Promise<void>;
 }
 
@@ -30,6 +31,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const initialize = useRahatStore((s) => s.initialize);
   const setCurrentUser = useRahatStore((s) => s.setCurrentUser);
   const findUserByEmail = useRahatStore((s) => s.findUserByEmail);
+  const createAccount = useRahatStore((s) => s.createAccount);
   const getCurrentUser = useRahatStore((s) => s.getCurrentUser);
   const currentUserId = useRahatStore((s) => s.currentUserId);
   const users = useRahatStore((s) => s.users);
@@ -79,7 +81,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
 
       const found = findUserByEmail(email);
-      if (!found) {
+      if (!found || found.password !== password) {
         throw new Error('Invalid credentials');
       }
 
@@ -88,6 +90,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     },
     [findUserByEmail, setCurrentUser]
   );
+
+  const signup = useCallback(async (input: { name: string; email: string; phone: string; password: string; role: 'citizen' | 'volunteer' }) => {
+    const result = createAccount(input);
+    if (!result.ok || !result.userId) throw new Error(result.error || 'Unable to create account');
+    await setCurrentUser(result.userId);
+    return portalForRole(input.role);
+  }, [createAccount, setCurrentUser]);
 
   const logout = useCallback(async (): Promise<void> => {
     await setCurrentUser(null);
@@ -103,6 +112,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         currentUser,
         userRole,
         login,
+        signup,
         logout,
       }}
     >

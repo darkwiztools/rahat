@@ -211,25 +211,9 @@ const TopBar: React.FC<TopBarProps> = ({
         </form>
 
         <div className="flex items-center gap-1 sm:gap-2">
-          <div
-            className={`hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium ${
-              offline
-                ? 'bg-red-50 text-red-700 border border-red-200'
-                : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-            }`}
-            title={offline ? 'Working in local/offline mode' : 'Connected to local sync'}
-          >
-            {offline ? (
-              <>
-                <WifiOff className="w-3.5 h-3.5" />
-                <span>Offline</span>
-              </>
-            ) : (
-              <>
-                <Wifi className="w-3.5 h-3.5" />
-                <span>Online</span>
-              </>
-            )}
+          <div className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200" title="Connected">
+            <Wifi className="w-3.5 h-3.5" />
+            <span>Online</span>
           </div>
 
           <button

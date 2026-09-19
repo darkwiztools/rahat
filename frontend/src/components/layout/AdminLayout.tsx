@@ -100,28 +100,6 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
-      {showOfflineBanner && (
-        <div className="bg-amber-50 border-b border-amber-200 text-amber-800">
-          <div className="flex items-center justify-between px-4 py-2 max-w-screen-2xl mx-auto">
-            <div className="flex items-center gap-2 text-sm">
-              <WifiOff className="w-4 h-4 text-amber-600 flex-shrink-0" />
-              <span>
-                <span className="font-semibold">Offline mode.</span> Changes are saved
-                locally and will sync when the backend returns.
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={handleDismissBanner}
-              className="p-1 rounded-md hover:bg-amber-100 text-amber-700"
-              aria-label="Dismiss offline banner"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      )}
-
       <div className="flex flex-1 min-h-0">
         <div
           className={`${

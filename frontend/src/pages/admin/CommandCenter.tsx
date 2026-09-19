@@ -21,6 +21,7 @@ import SeverityBadge from '../../components/ui/SeverityBadge';
 import AvailabilityBadge from '../../components/ui/AvailabilityBadge';
 import AssignVolunteerModal from '../../components/modals/AssignVolunteerModal';
 import { useRahatStore } from '../../store/useRahatStore';
+import { useCurrentUser } from '../../store/useRahatStore';
 import type { EmergencyRequest, Notification, Volunteer } from '../../types/rahat';
 import { SEVERITY_ORDER } from '../../constants/rahat';
 
@@ -53,6 +54,8 @@ const CommandCenter: React.FC = () => {
   const resources = useRahatStore((s) => s.resources);
   const notifications = useRahatStore((s) => s.notifications);
   const markNotificationRead = useRahatStore((s) => s.markNotificationRead);
+  const deleteRequest = useRahatStore((s) => s.deleteRequest);
+  const currentUser = useCurrentUser();
   const [assignmentRequestId, setAssignmentRequestId] = useState<string | null>(null);
 
   const kpis = useMemo(() => {
@@ -133,6 +136,13 @@ const CommandCenter: React.FC = () => {
       ),
     },
     {
+      key: 'delete',
+      label: 'Remove',
+      render: (row: EmergencyRequest) => (
+        <button type="button" onClick={() => { if (currentUser && window.confirm(`Remove request ${row.id}?`)) deleteRequest(row.id, { actorId: currentUser.id, actorName: currentUser.name, role: currentUser.role }); }} className="rounded-md border border-red-200 px-2.5 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50">Delete</button>
+      ),
+    },
+    {
       key: 'citizen',
       label: 'Citizen',
       render: (row: EmergencyRequest) => (
@@ -203,7 +213,7 @@ const CommandCenter: React.FC = () => {
             Command Center
           </h1>
           <p className="mt-1 text-sm text-slate-500">
-            North Bihar Flood Response
+            Active relief operations
           </p>
         </div>
         <div className="text-xs text-slate-400">
