@@ -25,8 +25,11 @@ const AdminShell: React.FC = () => {
   const refreshFromStorage = useRahatStore((s) => s.refreshFromStorage);
 
   useEffect(() => {
-    const interval = window.setInterval(() => { void refreshFromStorage(); }, 3000);
-    return () => window.clearInterval(interval);
+    const refresh = () => { void refreshFromStorage(); };
+    const interval = window.setInterval(refresh, 3000);
+    window.addEventListener('storage', refresh);
+    window.addEventListener('rahat-store-updated', refresh);
+    return () => { window.clearInterval(interval); window.removeEventListener('storage', refresh); window.removeEventListener('rahat-store-updated', refresh); };
   }, [refreshFromStorage]);
 
   return (

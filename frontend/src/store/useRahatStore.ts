@@ -124,6 +124,7 @@ async function persist(state: RahatSlice): Promise<void> {
   for (const k of PERSIST_KEYS) snapshot[k] = state[k] as any;
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
+    window.dispatchEvent(new CustomEvent('rahat-store-updated'));
   } catch {
     /* ignore */
   }

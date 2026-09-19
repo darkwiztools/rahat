@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   LifeBuoy,
@@ -55,8 +55,16 @@ const CommandCenter: React.FC = () => {
   const notifications = useRahatStore((s) => s.notifications);
   const markNotificationRead = useRahatStore((s) => s.markNotificationRead);
   const deleteRequest = useRahatStore((s) => s.deleteRequest);
+  const refreshFromStorage = useRahatStore((s) => s.refreshFromStorage);
   const currentUser = useCurrentUser();
   const [assignmentRequestId, setAssignmentRequestId] = useState<string | null>(null);
+  const [lastRefresh, setLastRefresh] = useState(new Date());
+
+  useEffect(() => {
+    const markRefreshed = () => setLastRefresh(new Date());
+    window.addEventListener('rahat-store-updated', markRefreshed);
+    return () => window.removeEventListener('rahat-store-updated', markRefreshed);
+  }, []);
 
   const kpis = useMemo(() => {
     const activeRequests = requests.filter(
@@ -216,8 +224,9 @@ const CommandCenter: React.FC = () => {
             Active relief operations
           </p>
         </div>
-        <div className="text-xs text-slate-400">
-          Last synced: {new Date().toLocaleTimeString()}
+        <div className="flex items-center gap-3 text-xs text-slate-400">
+          <span>Last refreshed: {lastRefresh.toLocaleTimeString()} · auto 3s</span>
+          <button type="button" onClick={() => { void refreshFromStorage(); setLastRefresh(new Date()); }} className="rounded-md border border-slate-200 bg-white px-2.5 py-1.5 font-semibold text-slate-600 hover:bg-slate-50">Refresh now</button>
         </div>
       </div>
 
