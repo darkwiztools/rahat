@@ -57,6 +57,8 @@ export type RahatActions = {
   findUserByEmail: (email: string) => UserProfile | null;
   updateUserProfile: (userId: string, updates: Pick<UserProfile, 'name' | 'phone'>) => { ok: boolean; error?: string };
   updateVolunteerLocation: (volunteerId: string, location: GeoCoords) => { ok: boolean; error?: string };
+  refreshFromStorage: () => Promise<void>;
+  createVolunteerProfile: (input: { name: string; email: string; phone: string; skills: Volunteer['skills']; vehicle: NonNullable<Volunteer['vehicle']> }) => { ok: boolean; error?: string; volunteerId?: string };
   createEmergencyRequest: (input: {
     citizenEmail: string;
     citizenName: string;
@@ -116,6 +118,11 @@ const PERSIST_KEYS: Array<keyof RahatSlice> = [
 async function persist(state: RahatSlice): Promise<void> {
   const snapshot: Partial<RahatSlice> = {};
   for (const k of PERSIST_KEYS) snapshot[k] = state[k] as any;
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
+  } catch {
+    /* ignore */
+  }
   try {
     await idbKeyval.set(STORAGE_KEY, snapshot);
   } catch {
@@ -300,6 +307,38 @@ export const useRahatStore = create<RahatStore>((set, get) => ({
     }));
     persist(get());
     return { ok: true };
+  },
+
+  refreshFromStorage: async () => {
+    let hydrated: Partial<RahatSlice> | null = null;
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) hydrated = JSON.parse(raw) as Partial<RahatSlice>;
+    } catch {
+      hydrated = null;
+    }
+    if (!hydrated) hydrated = await hydrate();
+    if (hydrated) {
+      const { currentUserId: _ignoredCurrentUserId, ...sharedState } = hydrated as Partial<RahatSlice>;
+      set((s) => ({ ...s, ...sharedState, initialized: true }));
+    }
+  },
+
+  createVolunteerProfile: (input) => {
+    const state = get();
+    if (state.users.some((user) => user.email.toLowerCase() === input.email.trim().toLowerCase())) {
+      return { ok: false, error: 'A user with this email already exists.' };
+    }
+    if (input.name.trim().length < 2 || !input.email.includes('@')) return { ok: false, error: 'Enter a valid name and email.' };
+    const userId = generateUUID();
+    const volunteerId = generateUUID();
+    const ts = nowISO();
+    const user: UserProfile = { id: userId, email: input.email.trim().toLowerCase(), name: input.name.trim(), role: 'volunteer', phone: input.phone.trim(), createdAt: ts };
+    const volunteer: Volunteer = { id: volunteerId, userId, name: user.name, phone: user.phone || '', skills: input.skills, availability: 'AVAILABLE', location: { lat: 26.98, lng: 84.5, address: 'West Champaran District, Bihar, India' }, vehicle: input.vehicle, currentAssignmentIds: [], completedMissions: 0, experienceMonths: 0 };
+    set((s) => ({ ...s, users: [...s.users, user], volunteers: [...s.volunteers, volunteer] }));
+    get().appendAuditLog({ actor: state.currentUserId || 'system', action: 'CREATE_VOLUNTEER', entityType: 'VOLUNTEER', entityId: volunteerId, note: `Created volunteer profile for ${user.name}` });
+    persist(get());
+    return { ok: true, volunteerId };
   },
 
   createEmergencyRequest: (input) => {

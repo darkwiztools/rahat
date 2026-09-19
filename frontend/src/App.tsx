@@ -6,6 +6,7 @@ import AdminLayout from './components/layout/AdminLayout';
 import CommandCenter from './pages/admin/CommandCenter';
 import LiveMapPage from './pages/admin/LiveMapPage';
 import SettingsPage from './pages/admin/SettingsPage';
+import VolunteersPage from './pages/admin/VolunteersPage';
 import LoginPage from './pages/shared/LoginPage';
 import PortalPage from './pages/shared/PortalPage';
 import { useAuth } from './context/AuthContext';
@@ -43,6 +44,7 @@ const App: React.FC = () => (
       <Route path="/admin/dashboard" element={<RoleRouteGuard allowedRoles={['coordinator']}><CommandCenter /></RoleRouteGuard>} />
       <Route path="/admin/map" element={<RoleRouteGuard allowedRoles={['coordinator']}><LiveMapPage /></RoleRouteGuard>} />
       <Route path="/admin/settings" element={<RoleRouteGuard allowedRoles={['coordinator']}><SettingsPage /></RoleRouteGuard>} />
+      <Route path="/admin/volunteers" element={<RoleRouteGuard allowedRoles={['coordinator']}><VolunteersPage /></RoleRouteGuard>} />
       <Route path="/admin/*" element={<RoleRouteGuard allowedRoles={['coordinator']}><PortalPage title="Operations workspace" /></RoleRouteGuard>} />
     </Route>
     <Route path="/citizen" element={<ProtectedRoute><RoleRouteGuard allowedRoles={['citizen']}><PortalPage title="Citizen assistance" /></RoleRouteGuard></ProtectedRoute>} />

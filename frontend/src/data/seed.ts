@@ -59,6 +59,7 @@ export function createSeedData(): SeedData {
   const volunteers: Volunteer[] = [
     {
       id: 'v-amit',
+      userId: 'u-vol-1',
       name: 'Amit Kumar',
       phone: '+91-90123-45678',
       skills: ['First Aid', 'Driving', 'Logistics'],

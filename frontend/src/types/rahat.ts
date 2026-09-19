@@ -129,6 +129,7 @@ export interface EmergencyRequest {
 
 export interface Volunteer {
   id: string;
+  userId?: string;
   name: string;
   phone: string;
   skills: VolunteerSkill[];

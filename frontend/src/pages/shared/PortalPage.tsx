@@ -29,12 +29,21 @@ const PortalPage: React.FC<{ title: string }> = ({ title }) => {
   const assignVolunteerToRequest = useRahatStore((s) => s.assignVolunteerToRequest);
   const updateRequestStatus = useRahatStore((s) => s.updateRequestStatus);
   const updateVolunteerLocation = useRahatStore((s) => s.updateVolunteerLocation);
+  const updateUserProfile = useRahatStore((s) => s.updateUserProfile);
+  const refreshFromStorage = useRahatStore((s) => s.refreshFromStorage);
   const [notice, setNotice] = useState('');
   const isCitizen = currentUser?.role === 'citizen';
   const ownRequests = useMemo(() => requests.filter((request) => request.citizenEmail === currentUser?.email), [requests, currentUser?.email]);
-  const currentVolunteer = volunteers.find((volunteer) => volunteer.name === currentUser?.name);
+  const currentVolunteer = volunteers.find((volunteer) => volunteer.userId === currentUser?.id) || volunteers.find((volunteer) => volunteer.name === currentUser?.name);
   const openRequests = requests.filter((request) => !terminalStatuses.includes(request.status) && !request.assignedVolunteerId);
   const assignedRequests = requests.filter((request) => request.assignedVolunteerId === currentVolunteer?.id);
+
+  useEffect(() => {
+    const refresh = () => { void refreshFromStorage(); };
+    const interval = window.setInterval(refresh, 3000);
+    window.addEventListener('storage', refresh);
+    return () => { window.clearInterval(interval); window.removeEventListener('storage', refresh); };
+  }, [refreshFromStorage]);
 
   const submitRequest = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -72,12 +81,13 @@ const PortalPage: React.FC<{ title: string }> = ({ title }) => {
   return <main className="min-h-screen bg-slate-50 p-5 sm:p-8"><div className="max-w-6xl mx-auto">
     <div className="mb-8 flex items-start justify-between gap-4"><div><p className="text-sm font-semibold text-blue-600 uppercase tracking-wide">RAHAT / {location.pathname.split('/')[1]}</p><h1 className="mt-2 text-3xl font-bold text-slate-900">{title}</h1><p className="mt-1 text-slate-500">Welcome back, {currentUser?.name}.</p></div><button type="button" onClick={async () => { await logout(); navigate('/login'); }} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Sign out</button></div>
     {notice && <div className="mb-6 flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800"><CheckCircle2 className="w-4 h-4" />{notice}</div>}
-    {isCitizen ? <CitizenView currentUser={currentUser} ownRequests={ownRequests} volunteers={volunteers} submitRequest={submitRequest} /> : <VolunteerView currentUser={currentUser} currentVolunteer={currentVolunteer} resourcesCount={resources.length} openRequests={openRequests} assignedRequests={assignedRequests} claim={claim} advance={advance} updateVolunteerLocation={updateVolunteerLocation} />}
+    {isCitizen ? <CitizenView currentUser={currentUser} ownRequests={ownRequests} volunteers={volunteers} submitRequest={submitRequest} refreshFromStorage={refreshFromStorage} /> : <VolunteerView currentUser={currentUser} currentVolunteer={currentVolunteer} resourcesCount={resources.length} openRequests={openRequests} assignedRequests={assignedRequests} claim={claim} advance={advance} updateVolunteerLocation={updateVolunteerLocation} updateUserProfile={updateUserProfile} refreshFromStorage={refreshFromStorage} />}
   </div></main>;
 };
 
-const CitizenView: React.FC<{ currentUser: ReturnType<typeof useAuth>['currentUser']; ownRequests: EmergencyRequest[]; volunteers: ReturnType<typeof useRahatStore.getState>['volunteers']; submitRequest: (event: React.FormEvent<HTMLFormElement>) => void }> = ({ currentUser, ownRequests, volunteers, submitRequest }) => {
+const CitizenView: React.FC<{ currentUser: ReturnType<typeof useAuth>['currentUser']; ownRequests: EmergencyRequest[]; volunteers: ReturnType<typeof useRahatStore.getState>['volunteers']; submitRequest: (event: React.FormEvent<HTMLFormElement>) => void; refreshFromStorage: () => Promise<void> }> = ({ currentUser, ownRequests, volunteers, submitRequest, refreshFromStorage }) => {
   const assignedVolunteers = volunteers.filter((volunteer) => ownRequests.some((request) => request.assignedVolunteerId === volunteer.id));
+  const responderCenter = assignedVolunteers[0]?.location;
   const [location, setLocation] = useState({ lat: 26.98, lng: 84.5, address: '' });
   return <>
   <form onSubmit={submitRequest} className="bg-white border border-slate-200 rounded-xl p-5 sm:p-6 space-y-5">
@@ -93,14 +103,17 @@ const CitizenView: React.FC<{ currentUser: ReturnType<typeof useAuth>['currentUs
     <button className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 font-semibold text-white hover:bg-blue-700">Submit request <ArrowRight className="w-4 h-4" /></button>
   </form>
   <RequestList title="My submitted requests" requests={ownRequests} empty="No requests submitted yet." />
-  {assignedVolunteers.length > 0 && <section className="mt-6 overflow-hidden rounded-xl border border-slate-200 bg-white"><div className="border-b border-slate-200 p-5"><h2 className="text-lg font-semibold text-slate-900">Live responder location</h2><p className="mt-1 text-sm text-slate-500">See the latest shared location of volunteers assigned to your requests.</p></div><div className="h-[360px]"><RahatMap requests={ownRequests} volunteers={assignedVolunteers} shelters={[]} reliefCenters={[]} showRequests showVolunteers height="100%" /></div></section>}
+  {assignedVolunteers.length > 0 && <section className="mt-6 overflow-hidden rounded-xl border border-slate-200 bg-white"><div className="flex items-center justify-between gap-3 border-b border-slate-200 p-5"><div><h2 className="text-lg font-semibold text-slate-900">Live responder location</h2><p className="mt-1 text-sm text-slate-500">Updates automatically every few seconds while your responder shares location.</p></div><button type="button" onClick={() => void refreshFromStorage()} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">Refresh now</button></div><div className="h-[360px]"><RahatMap requests={ownRequests} volunteers={assignedVolunteers} shelters={[]} reliefCenters={[]} showRequests showVolunteers center={responderCenter ? [responderCenter.lat, responderCenter.lng] : undefined} zoom={13} height="100%" /></div></section>}
   </>;
 };
 
-const VolunteerView: React.FC<{ currentUser: ReturnType<typeof useAuth>['currentUser']; currentVolunteer: ReturnType<typeof useRahatStore.getState>['volunteers'][number] | undefined; resourcesCount: number; openRequests: EmergencyRequest[]; assignedRequests: EmergencyRequest[]; claim: (request: EmergencyRequest) => void; advance: (request: EmergencyRequest) => void; updateVolunteerLocation: (volunteerId: string, location: { lat: number; lng: number; address: string }) => { ok: boolean; error?: string } }> = ({ currentUser, currentVolunteer, resourcesCount, openRequests, assignedRequests, claim, advance, updateVolunteerLocation }) => {
+const VolunteerView: React.FC<{ currentUser: ReturnType<typeof useAuth>['currentUser']; currentVolunteer: ReturnType<typeof useRahatStore.getState>['volunteers'][number] | undefined; resourcesCount: number; openRequests: EmergencyRequest[]; assignedRequests: EmergencyRequest[]; claim: (request: EmergencyRequest) => void; advance: (request: EmergencyRequest) => void; updateVolunteerLocation: (volunteerId: string, location: { lat: number; lng: number; address: string }) => { ok: boolean; error?: string }; updateUserProfile: (userId: string, updates: { name: string; phone?: string }) => { ok: boolean; error?: string }; refreshFromStorage: () => Promise<void> }> = ({ currentUser, currentVolunteer, resourcesCount, openRequests, assignedRequests, claim, advance, updateVolunteerLocation, updateUserProfile, refreshFromStorage }) => {
   const [sharing, setSharing] = useState(true);
   const [locationError, setLocationError] = useState('');
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const [profileName, setProfileName] = useState(currentUser?.name || '');
+  const [profilePhone, setProfilePhone] = useState(currentUser?.phone || '');
+  const [profileNotice, setProfileNotice] = useState('');
 
   useEffect(() => {
     if (!sharing || !currentVolunteer) return undefined;
@@ -121,9 +134,10 @@ const VolunteerView: React.FC<{ currentUser: ReturnType<typeof useAuth>['current
   }, [sharing, currentVolunteer, updateVolunteerLocation]);
 
   return <>
+  <section className="mb-6 rounded-xl border border-slate-200 bg-white p-5"><h2 className="font-semibold text-slate-900">My volunteer profile</h2><div className="mt-3 grid gap-3 sm:grid-cols-[1fr_1fr_auto]"><input value={profileName} onChange={(event) => setProfileName(event.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Name" /><input value={profilePhone} onChange={(event) => setProfilePhone(event.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Phone" /><button type="button" onClick={() => { if (currentUser) { const result = updateUserProfile(currentUser.id, { name: profileName, phone: profilePhone }); setProfileNotice(result.ok ? 'Profile saved.' : result.error || 'Could not save.'); } }} className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white">Save profile</button></div>{profileNotice && <p className="mt-2 text-xs text-emerald-700">{profileNotice}</p>}</section>
   <div className="grid gap-4 md:grid-cols-3 mb-6"><Metric label="Open missions" value={openRequests.length} icon={ClipboardList} /><Metric label="My assignments" value={assignedRequests.length} icon={Users} /><Metric label="Resource lines" value={resourcesCount} icon={Package} /></div>
   <section className="mb-6 rounded-xl border border-blue-200 bg-blue-50 p-5"><div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="flex items-center gap-2 font-semibold text-slate-900"><LocateFixed className="h-5 w-5 text-blue-600" />Live location sharing</h2><p className="mt-1 text-sm text-slate-600">Share your current position with citizens and coordinators while you are on duty.</p>{lastUpdate && <p className="mt-1 text-xs text-blue-700">Last updated {lastUpdate.toLocaleTimeString()}</p>}{locationError && <p className="mt-1 text-xs text-red-700">{locationError}</p>}</div><button type="button" onClick={() => { setLocationError(''); setSharing((value) => !value); }} disabled={!currentVolunteer || !currentUser} className={`rounded-lg px-4 py-2.5 text-sm font-semibold text-white ${sharing ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'} disabled:cursor-not-allowed disabled:opacity-50`}>{sharing ? 'Stop sharing location' : 'Start sharing location'}</button></div></section>
-  {assignedRequests.length > 0 && <section className="mb-6 overflow-hidden rounded-xl border border-slate-200 bg-white"><div className="border-b border-slate-200 p-5"><h2 className="text-lg font-semibold text-slate-900">Live mission map</h2><p className="mt-1 text-sm text-slate-500">Your marker and assigned request locations update as your browser reports movement.</p></div><div className="h-[380px]"><RahatMap requests={assignedRequests} volunteers={currentVolunteer ? [currentVolunteer] : []} shelters={[]} reliefCenters={[]} showRequests showVolunteers height="100%" /></div></section>}
+  {assignedRequests.length > 0 && <section className="mb-6 overflow-hidden rounded-xl border border-slate-200 bg-white"><div className="flex items-center justify-between gap-3 border-b border-slate-200 p-5"><div><h2 className="text-lg font-semibold text-slate-900">Live mission map</h2><p className="mt-1 text-sm text-slate-500">Your marker and assigned request locations update as your browser reports movement.</p></div><button type="button" onClick={() => void refreshFromStorage()} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">Refresh now</button></div><div className="h-[380px]"><RahatMap requests={assignedRequests} volunteers={currentVolunteer ? [currentVolunteer] : []} shelters={[]} reliefCenters={[]} showRequests showVolunteers height="100%" /></div></section>}
   <section className="bg-white border border-slate-200 rounded-xl p-5"><h2 className="text-lg font-semibold text-slate-900">Available missions</h2><div className="mt-4 space-y-3">{openRequests.length === 0 ? <p className="text-sm text-slate-500">No unassigned missions right now.</p> : openRequests.map((request) => <Mission key={request.id} request={request}><button onClick={() => claim(request)} className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700">Claim mission</button></Mission>)}</div></section>
   <section className="mt-6 bg-white border border-slate-200 rounded-xl p-5"><h2 className="text-lg font-semibold text-slate-900">My active missions</h2><div className="mt-4 space-y-3">{assignedRequests.length === 0 ? <p className="text-sm text-slate-500">Claim a mission to see it here.</p> : assignedRequests.map((request) => <Mission key={request.id} request={request}>{nextStatuses[request.status] && <button onClick={() => advance(request)} className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-700">Mark {nextStatuses[request.status]!.replace('_', ' ').toLowerCase()}</button>}</Mission>)}</div></section>
 </>;
